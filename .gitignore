@@ -1,8 +1,8 @@
-data/
 venv/
+data/
 CLAUDE.md
-checkpoints/
+__pycache__/
 *.pt
 *.pth
-__pycache__/
 .DS_Store
+stylegan2/outputs/
