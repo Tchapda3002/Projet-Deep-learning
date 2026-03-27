@@ -1,0 +1,18 @@
+# Deep Learning
+torch
+torchvision
+
+# Notebooks
+jupyter
+ipykernel
+ipywidgets
+
+# Visualisation
+matplotlib
+numpy
+
+# Utilitaires images
+Pillow
+
+# Monitoring entraînement
+wandb
