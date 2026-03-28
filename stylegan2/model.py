@@ -1,11 +1,12 @@
 """
-StyleGAN2 — Architecture complète pour images 64x64.
+StyleGAN2 — Architecture complète pour images 256x256.
 
 Innovations clés vs DCGAN / ProGAN :
   1. Mapping Network  : z -> w (espace de style intermédiaire)
   2. Weight Demodulation : remplace AdaIN + BatchNorm, plus stable
   3. Input constant appris : le générateur part d'un tenseur fixe 4x4
   4. R1 Regularization : pénalise le gradient du discriminateur sur les vraies images
+  5. EMA Generator : moyenne exponentielle des poids -> images plus nettes
 """
 
 import torch
@@ -135,15 +136,17 @@ class StyleBlock(nn.Module):
 
 class StyleGenerator(nn.Module):
     """
-    Génère une image 64x64 depuis un vecteur de style w.
+    Génère une image 256x256 depuis un vecteur de style w.
 
     Pipeline :
       z -> MappingNetwork -> w
       Input constant 4x4 -> StyleBlock (4x4) -> StyleBlock (8x8) -> ...
-      -> StyleBlock (64x64) -> ToRGB -> image
+      -> StyleBlock (256x256) -> ToRGB -> image
 
     L'input constant est un tenseur appris — le générateur ne dépend
     pas de z directement, seulement via w qui module les poids.
+
+    synthesis(w) permet d'injecter w directement (truncation trick).
     """
     def __init__(self, z_dim=512, w_dim=512, channels=3):
         super().__init__()
@@ -153,14 +156,14 @@ class StyleGenerator(nn.Module):
         # Input constant appris (4x4x512)
         self.const = nn.Parameter(torch.randn(1, 512, 4, 4))
 
-        # Filtres par résolution : 4, 8, 16, 32, 64
-        feats = [512, 256, 128, 64, 32]
+        # Filtres par résolution : 4, 8, 16, 32, 64, 128, 256
+        feats = [512, 512, 512, 256, 128, 64, 32]
 
         # Bloc initial (4x4, pas d'upsample)
         self.init_block = StyleBlock(512, 512, w_dim, upsample=False)
 
         # Blocs progressifs : chaque bloc double la résolution
-        # 4x4 -> 8x8 -> 16x16 -> 32x32 -> 64x64
+        # 4x4 -> 8x8 -> 16x16 -> 32x32 -> 64x64 -> 128x128 -> 256x256
         self.blocks = nn.ModuleList([
             StyleBlock(feats[i], feats[i + 1], w_dim, upsample=True)
             for i in range(len(feats) - 1)
@@ -170,16 +173,18 @@ class StyleGenerator(nn.Module):
         self.to_rgb = ModulatedConv2d(feats[-1], channels, 1, w_dim, demod=False)
         self.bias   = nn.Parameter(torch.zeros(1, channels, 1, 1))
 
-    def forward(self, z):
-        w = self.mapping(z)                         # z -> w
-        x = self.const.expand(z.size(0), -1, -1, -1)  # input constant
-
-        x = self.init_block(x, w)                   # 4x4
+    def synthesis(self, w):
+        """Partie synthèse uniquement — prend w directement (pour truncation trick)."""
+        x = self.const.expand(w.size(0), -1, -1, -1)
+        x = self.init_block(x, w)
         for block in self.blocks:
-            x = block(x, w)                         # 8 -> 16 -> 32 -> 64
-
+            x = block(x, w)
         rgb = self.to_rgb(x, w) + self.bias
         return torch.tanh(rgb)
+
+    def forward(self, z):
+        w = self.mapping(z)
+        return self.synthesis(w)
 
 
 # ─── Discriminateur ───────────────────────────────────────────────────────────
@@ -189,12 +194,12 @@ class StyleDiscriminator(nn.Module):
     Discriminateur résiduel (ResNet-like) — plus stable que celui de DCGAN.
 
     Pas de BatchNorm, pas de Sigmoid — retourne un score non borné (logit).
-    La perte utilisée est WGAN-GP ou R1 (pas BCELoss).
+    La perte utilisée est Non-Saturating Loss + R1 regularization.
     """
     def __init__(self, channels=3):
         super().__init__()
 
-        feats = [32, 64, 128, 256, 512]
+        feats = [32, 64, 128, 256, 512, 512, 512]
 
         self.from_rgb = nn.Sequential(
             nn.Conv2d(channels, feats[0], 1),
@@ -213,6 +218,7 @@ class StyleDiscriminator(nn.Module):
         self.blocks = nn.Sequential(*blocks)
 
         # Bloc final : MinibatchStd + FC
+        # Après 6 AvgPool2d sur entrée 256x256 : 256/64 = 4x4
         self.final = nn.Sequential(
             nn.Conv2d(feats[-1] + 1, feats[-1], 3, padding=1),
             nn.LeakyReLU(0.2, inplace=True),

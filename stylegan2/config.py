@@ -19,15 +19,15 @@ MODE = "runpod" if os.path.exists(RUNPOD_DATA) else "local"
 if MODE == "runpod":
     DATA_PATH   = RUNPOD_DATA
     OUTPUT_PATH = "/workspace/outputs/stylegan2"
-    NUM_EPOCHS  = 100
-    BATCH_SIZE  = 16
+    NUM_EPOCHS  = 200
+    BATCH_SIZE  = 32
     NUM_WORKERS = 4
 else:
     # Chemin local relatif au dossier du projet
     _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     DATA_PATH     = os.path.join(_PROJECT_ROOT, "data", "ffhq256_sample")
     OUTPUT_PATH   = os.path.join(_PROJECT_ROOT, "stylegan2", "outputs")
-    NUM_EPOCHS    = 10
+    NUM_EPOCHS    = 2
     BATCH_SIZE    = 4
     NUM_WORKERS   = 0
 
@@ -39,7 +39,7 @@ METRICS_DIR        = os.path.join(OUTPUT_PATH, "metrics")
 # ── Hyperparamètres modèle ────────────────────────────────────────────────────
 Z_DIM      = 512
 W_DIM      = 512
-IMG_SIZE   = 64
+IMG_SIZE   = 256
 CHANNELS   = 3
 
 # ── Hyperparamètres entraînement ──────────────────────────────────────────────
