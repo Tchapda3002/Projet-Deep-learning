@@ -191,27 +191,29 @@ class StyleGenerator(nn.Module):
 
 class StyleDiscriminator(nn.Module):
     """
-    Discriminateur résiduel (ResNet-like) — plus stable que celui de DCGAN.
+    Discriminateur résiduel avec Spectral Normalization.
 
-    Pas de BatchNorm, pas de Sigmoid — retourne un score non borné (logit).
-    La perte utilisée est Non-Saturating Loss + R1 regularization.
+    La Spectral Normalization contraint le discriminateur à être
+    Lipschitz-1 — empêche les sorties de croître de façon incontrôlée
+    et stabilise l'entraînement sans avoir besoin de R1 regularization.
     """
     def __init__(self, channels=3):
         super().__init__()
+        from torch.nn.utils import spectral_norm
 
         feats = [32, 64, 128, 256, 512, 512, 512]
 
         self.from_rgb = nn.Sequential(
-            nn.Conv2d(channels, feats[0], 1),
+            spectral_norm(nn.Conv2d(channels, feats[0], 1)),
             nn.LeakyReLU(0.2)
         )
 
         blocks = []
         for i in range(len(feats) - 1):
             blocks += [
-                nn.Conv2d(feats[i], feats[i], 3, padding=1),
+                spectral_norm(nn.Conv2d(feats[i], feats[i], 3, padding=1)),
                 nn.LeakyReLU(0.2, inplace=True),
-                nn.Conv2d(feats[i], feats[i + 1], 3, padding=1),
+                spectral_norm(nn.Conv2d(feats[i], feats[i + 1], 3, padding=1)),
                 nn.LeakyReLU(0.2, inplace=True),
                 nn.AvgPool2d(2),
             ]
@@ -220,12 +222,12 @@ class StyleDiscriminator(nn.Module):
         # Bloc final : MinibatchStd + FC
         # Après 6 AvgPool2d sur entrée 256x256 : 256/64 = 4x4
         self.final = nn.Sequential(
-            nn.Conv2d(feats[-1] + 1, feats[-1], 3, padding=1),
+            spectral_norm(nn.Conv2d(feats[-1] + 1, feats[-1], 3, padding=1)),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Flatten(),
-            nn.Linear(feats[-1] * 4 * 4, feats[-1]),
+            spectral_norm(nn.Linear(feats[-1] * 4 * 4, feats[-1])),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(feats[-1], 1),
+            spectral_norm(nn.Linear(feats[-1], 1)),
         )
 
     def _minibatch_std(self, x):

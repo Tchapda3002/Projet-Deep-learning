@@ -19,8 +19,8 @@ MODE = "runpod" if os.path.exists(RUNPOD_DATA) else "local"
 if MODE == "runpod":
     DATA_PATH   = RUNPOD_DATA
     OUTPUT_PATH = "/workspace/outputs/stylegan2"
-    NUM_EPOCHS  = 200
-    BATCH_SIZE  = 32
+    NUM_EPOCHS  = 100
+    BATCH_SIZE  = 64
     NUM_WORKERS = 4
 else:
     # Chemin local relatif au dossier du projet
@@ -43,8 +43,8 @@ IMG_SIZE   = 256
 CHANNELS   = 3
 
 # ── Hyperparamètres entraînement ──────────────────────────────────────────────
-LR_G       = 0.002
-LR_D       = 0.002
+LR_G       = 0.0002
+LR_D       = 0.0002
 BETA1      = 0.0
 BETA2      = 0.99
 R1_GAMMA   = 10.0
